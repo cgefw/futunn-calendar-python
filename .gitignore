@@ -1,0 +1,17 @@
+.DS_Store
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+build/
+dist/
+*.egg-info/
+data/
+logs/
+*.duckdb
+*.duckdb.wal
+.env
+.gh-config/
+.local/

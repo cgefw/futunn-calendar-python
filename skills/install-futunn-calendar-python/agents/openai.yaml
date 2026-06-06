@@ -1,0 +1,4 @@
+interface:
+  display_name: "Install Calendar Python Wrapper"
+  short_description: "Install unofficial calendar wrapper"
+  default_prompt: "Install or update the unofficial calendar webpage JSON wrapper from GitHub, then verify the CLI and optional DuckDB sync tools."

@@ -1,6 +1,6 @@
 # Futunn Calendar Python Client (Unofficial)
 
-**Unofficial, not affiliated with Futu, Futunn, Futubull, or any related
+**Unofficial, not affiliated with Futu, Futunn, Futubull, Moomoo, 富途 or any related
 company. For personal research only. Do not redistribute data.**
 
 This is an experimental wrapper for publicly reachable webpage JSON responses

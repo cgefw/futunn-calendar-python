@@ -72,6 +72,8 @@ class EventRefreshDaemon:
         self.client = FutunnCalendarClient(language="zh-cn", max_retries=5, retry_delay=2)
         self.stop_event = threading.Event()
         self.refresh_lock = threading.Lock()
+        self.jobs_lock = threading.Lock()
+        self.db_lock = threading.Lock()
         self.timers: Dict[str, threading.Timer] = {}
         self.running_jobs: set[str] = set()
         self.last_sync_by_date: Dict[str, datetime] = {}
@@ -87,7 +89,9 @@ class EventRefreshDaemon:
 
     def stop(self) -> None:
         self.stop_event.set()
-        for timer in list(self.timers.values()):
+        with self.jobs_lock:
+            timers = list(self.timers.values())
+        for timer in timers:
             timer.cancel()
 
     def scan_and_schedule(self) -> None:
@@ -97,8 +101,9 @@ class EventRefreshDaemon:
         print(f"[{stamp()}] scan found {len(jobs)} pending events", flush=True)
 
         for job in jobs:
-            if job.event_key in self.timers or job.event_key in self.running_jobs:
-                continue
+            with self.jobs_lock:
+                if job.event_key in self.timers or job.event_key in self.running_jobs:
+                    continue
 
             if job.event_time_utc < expired_cutoff:
                 self._record_job(
@@ -124,7 +129,11 @@ class EventRefreshDaemon:
 
             timer = threading.Timer(delay, self._run_job, args=(job, 1))
             timer.daemon = True
-            self.timers[job.event_key] = timer
+            with self.jobs_lock:
+                if job.event_key in self.running_jobs:
+                    timer.cancel()
+                    continue
+                self.timers[job.event_key] = timer
             timer.start()
             print(
                 f"[{stamp()}] scheduled {job.event_key} at {run_at.isoformat()} UTC "
@@ -133,8 +142,9 @@ class EventRefreshDaemon:
             )
 
     def _run_job(self, job: EventJob, attempt: int) -> None:
-        self.timers.pop(job.event_key, None)
-        self.running_jobs.add(job.event_key)
+        with self.jobs_lock:
+            self.timers.pop(job.event_key, None)
+            self.running_jobs.add(job.event_key)
         try:
             now = utc_now_naive()
             deadline = job.event_time_utc + self.max_refresh_age
@@ -190,7 +200,8 @@ class EventRefreshDaemon:
                     return
                 self._schedule_next_run(job, attempt, str(exc))
         finally:
-            self.running_jobs.discard(job.event_key)
+            with self.jobs_lock:
+                self.running_jobs.discard(job.event_key)
 
     def _next_retry_delay(self, attempt: int) -> Optional[float]:
         if self.retry_schedule is None:
@@ -248,7 +259,8 @@ class EventRefreshDaemon:
         )
         timer = threading.Timer(delay, self._run_job, args=(job, attempt + 1))
         timer.daemon = True
-        self.timers[job.event_key] = timer
+        with self.jobs_lock:
+            self.timers[job.event_key] = timer
         timer.start()
         print(
             f"[{stamp()}] retry at {run_at.isoformat()} UTC "
@@ -278,7 +290,7 @@ class EventRefreshDaemon:
 
     def _init_tables(self) -> None:
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
-        with duckdb.connect(self.db_path) as conn:
+        with self.db_lock, duckdb.connect(self.db_path) as conn:
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS calendar_event_refresh_jobs (
@@ -366,7 +378,7 @@ class EventRefreshDaemon:
         last_actual: Optional[str] = None,
         last_error: Optional[str] = None,
     ) -> None:
-        with duckdb.connect(self.db_path) as conn:
+        with self.db_lock, duckdb.connect(self.db_path) as conn:
             existing = conn.execute(
                 """
                 SELECT scheduled_at, triggered_at, attempts, last_actual, last_error

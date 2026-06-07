@@ -36,6 +36,9 @@ This log is intended for humans and AI agents maintaining the repository.
 - Updated README files to document event-time actual refresh behavior.
 - Checked tracked files for accidental API keys, `.env` content, DuckDB files, local data files, and bundled datasets.
 - Fixed duplicate event refresh scheduling race in `scripts/event_timer_refresh.py` by tracking running event keys in `self.running_jobs` and skipping them in `scan_and_schedule()`.
+- Hardened `scripts/event_timer_refresh.py` thread safety:
+  - Added a dedicated `jobs_lock` guarding all `self.timers` and `self.running_jobs` mutations across `scan_and_schedule()`, `_run_job()`, `_schedule_next_run()`, and `stop()`.
+  - Added a `db_lock` around every DuckDB write site in `_init_tables()` and `_record_job()` so concurrent refresh jobs cannot interleave `SELECT` + `DELETE` + `INSERT` on the same `event_key`.
 
 ## Maintenance Notes
 

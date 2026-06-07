@@ -39,6 +39,7 @@ This log is intended for humans and AI agents maintaining the repository.
 - Hardened `scripts/event_timer_refresh.py` thread safety:
   - Added a dedicated `jobs_lock` guarding all `self.timers` and `self.running_jobs` mutations across `scan_and_schedule()`, `_run_job()`, `_schedule_next_run()`, and `stop()`.
   - Added a `db_lock` around every DuckDB write site in `_init_tables()` and `_record_job()` so concurrent refresh jobs cannot interleave `SELECT` + `DELETE` + `INSERT` on the same `event_key`.
+- Wrapped `sync_calendar_to_duckdb()` event/detail writes and the success run record in an explicit DuckDB transaction. If a sync fails mid-run, event writes are rolled back and a separate failed `calendar_sync_runs` row is recorded.
 
 ## Maintenance Notes
 

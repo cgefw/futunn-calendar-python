@@ -1,4 +1,4 @@
-# AI Project Overview: futunn-calendar-python
+# AGENTS: futunn-calendar-python
 
 This file is for AI coding agents maintaining the project.
 
@@ -88,7 +88,8 @@ newsUniqueId OR articleId OR date|item_type|timestamp|title
 - Raw webpage JSON output should be available through `page.raw`.
 - If DuckDB is not installed, core imports should still work.
 - `sync-duckdb` should fail with a clear install-extra message when DuckDB is missing.
-- Event-time refresh waits until event time plus `--post-delay`, then retries according to `--retry-schedule`.
+- Event-time refresh waits until event time plus `--post-delay`, then retries hourly on absolute `event_time_utc` offsets until `actual` appears or `--max-refresh-hours` expires.
+- `--retry-schedule` is still available for explicit legacy fixed-delay behavior, but it is not the default.
 
 ## Validation
 

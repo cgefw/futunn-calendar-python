@@ -217,17 +217,19 @@ PYTHONPATH=src python scripts/event_timer_refresh.py \
   --db "$HOME/data/futunn_calendar.duckdb" \
   --min-star 3 \
   --post-delay 1 \
-  --retry-schedule 5,10,30,60x9
+  --retry-interval-seconds 3600 \
+  --max-refresh-hours 24 \
+  --backfill-minutes 1440
 ```
 
 默认重试逻辑：
 
 ```text
 事件时间 + 1 秒先刷新一次
-没拿到 actual，5 秒后重试
-再没拿到，10 秒后重试
-再没拿到，30 秒后重试
-之后每 60 秒重试，最多 9 次
+没拿到 actual，之后按 event_time_utc 的绝对偏移每 1 小时刷新一次
+actual 有值后标记为 done 并停止追踪
+事件时间后 24 小时仍无 actual，标记为 expired 并停止追踪
+同一天多个事件会复用当天刷新，避免短时间重复同步同一天
 ```
 
 ## Python 接口

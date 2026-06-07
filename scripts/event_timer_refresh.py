@@ -73,6 +73,7 @@ class EventRefreshDaemon:
         self.stop_event = threading.Event()
         self.refresh_lock = threading.Lock()
         self.timers: Dict[str, threading.Timer] = {}
+        self.running_jobs: set[str] = set()
         self.last_sync_by_date: Dict[str, datetime] = {}
 
     def run(self, once: bool = False) -> None:
@@ -96,7 +97,7 @@ class EventRefreshDaemon:
         print(f"[{stamp()}] scan found {len(jobs)} pending events", flush=True)
 
         for job in jobs:
-            if job.event_key in self.timers:
+            if job.event_key in self.timers or job.event_key in self.running_jobs:
                 continue
 
             if job.event_time_utc < expired_cutoff:
@@ -133,59 +134,63 @@ class EventRefreshDaemon:
 
     def _run_job(self, job: EventJob, attempt: int) -> None:
         self.timers.pop(job.event_key, None)
-        now = utc_now_naive()
-        deadline = job.event_time_utc + self.max_refresh_age
-        self._record_job(job, "running", triggered_at=now, attempts=attempt)
-
+        self.running_jobs.add(job.event_key)
         try:
-            self._refresh_event_day(job.event_date)
-            actual = self._load_actual(job.event_key)
-
-            if not actual_is_missing(actual):
-                self._record_job(
-                    job, "done", attempts=attempt, last_actual=str(actual),
-                )
-                print(
-                    f"[{stamp()}] done {job.event_key} actual={actual} title={job.title}",
-                    flush=True,
-                )
-                return
-
             now = utc_now_naive()
-            if now >= deadline:
+            deadline = job.event_time_utc + self.max_refresh_age
+            self._record_job(job, "running", triggered_at=now, attempts=attempt)
+
+            try:
+                self._refresh_event_day(job.event_date)
+                actual = self._load_actual(job.event_key)
+
+                if not actual_is_missing(actual):
+                    self._record_job(
+                        job, "done", attempts=attempt, last_actual=str(actual),
+                    )
+                    print(
+                        f"[{stamp()}] done {job.event_key} actual={actual} title={job.title}",
+                        flush=True,
+                    )
+                    return
+
+                now = utc_now_naive()
+                if now >= deadline:
+                    self._record_job(
+                        job, "expired", attempts=attempt,
+                        last_error=f"actual is still empty after {self.max_refresh_age}",
+                    )
+                    print(
+                        f"[{stamp()}] expired {job.event_key} "
+                        f"title={job.title} (no actual after {self.max_refresh_age})",
+                        flush=True,
+                    )
+                    return
+
+                self._schedule_next_run(job, attempt, "actual is still empty")
+
+            except Exception as exc:
                 self._record_job(
-                    job, "expired", attempts=attempt,
-                    last_error=f"actual is still empty after {self.max_refresh_age}",
+                    job, "error", attempts=attempt, last_error=str(exc),
                 )
                 print(
-                    f"[{stamp()}] expired {job.event_key} "
-                    f"title={job.title} (no actual after {self.max_refresh_age})",
-                    flush=True,
+                    f"[{stamp()}] error {job.event_key}: {exc}",
+                    file=sys.stderr, flush=True,
                 )
-                return
-
-            self._schedule_next_run(job, attempt, "actual is still empty")
-
-        except Exception as exc:
-            self._record_job(
-                job, "error", attempts=attempt, last_error=str(exc),
-            )
-            print(
-                f"[{stamp()}] error {job.event_key}: {exc}",
-                file=sys.stderr, flush=True,
-            )
-            now = utc_now_naive()
-            if now >= deadline:
-                self._record_job(
-                    job, "expired", attempts=attempt, last_error=str(exc),
-                )
-                print(
-                    f"[{stamp()}] expired {job.event_key} after error "
-                    f"title={job.title}",
-                    flush=True,
-                )
-                return
-            self._schedule_next_run(job, attempt, str(exc))
+                now = utc_now_naive()
+                if now >= deadline:
+                    self._record_job(
+                        job, "expired", attempts=attempt, last_error=str(exc),
+                    )
+                    print(
+                        f"[{stamp()}] expired {job.event_key} after error "
+                        f"title={job.title}",
+                        flush=True,
+                    )
+                    return
+                self._schedule_next_run(job, attempt, str(exc))
+        finally:
+            self.running_jobs.discard(job.event_key)
 
     def _next_retry_delay(self, attempt: int) -> Optional[float]:
         if self.retry_schedule is None:

@@ -35,6 +35,7 @@ This log is intended for humans and AI agents maintaining the repository.
 - Ensured missing `actual` jobs expire after the configured max refresh window.
 - Updated README files to document event-time actual refresh behavior.
 - Checked tracked files for accidental API keys, `.env` content, DuckDB files, local data files, and bundled datasets.
+- Fixed duplicate event refresh scheduling race in `scripts/event_timer_refresh.py` by tracking running event keys in `self.running_jobs` and skipping them in `scan_and_schedule()`.
 
 ## Maintenance Notes
 

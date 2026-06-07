@@ -440,7 +440,7 @@ def parse_retry_schedule(value: str) -> list[float]:
             delay_text, count_text = part.split("x", 1)
             delay = float(delay_text)
             count = int(count_text)
-            if count < 0:
+            if count <= 0:
                 raise ValueError(f"Invalid retry count in {raw_part!r}")
             schedule.extend([delay] * count)
         else:
@@ -448,8 +448,8 @@ def parse_retry_schedule(value: str) -> list[float]:
 
     if not schedule:
         raise ValueError("Retry schedule must contain at least one delay.")
-    if any(delay < 0 for delay in schedule):
-        raise ValueError("Retry delays must be non-negative.")
+    if any(delay <= 0 for delay in schedule):
+        raise ValueError("Retry delays must be positive.")
     return schedule
 
 

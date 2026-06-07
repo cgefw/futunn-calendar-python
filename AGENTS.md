@@ -91,6 +91,7 @@ newsUniqueId OR articleId OR date|item_type|timestamp|title
 - DuckDB event/detail writes should stay transactional; failed syncs must not leave partially refreshed event rows.
 - Event-time refresh waits until event time plus `--post-delay`, then retries hourly on absolute `event_time_utc` offsets until `actual` appears or `--max-refresh-hours` expires.
 - `--retry-schedule` is still available for explicit legacy fixed-delay behavior, but it is not the default.
+- Explicit retry schedules must use positive delays and positive repeat counts; do not allow zero-delay polling loops.
 
 ## Validation
 

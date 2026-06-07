@@ -97,6 +97,35 @@ print(con.execute("select min(date), max(date) from calendar_events").fetchone()
 PY
 ```
 
+## Event-Time Actual Refresh
+
+The daemon in `scripts/event_timer_refresh.py` watches `calendar_events` rows
+whose `actual` value is still missing. It refreshes the event's calendar day at
+`timestamp_utc + --post-delay`, then keeps checking on absolute event-time
+offsets until an actual value appears or the max refresh age expires.
+
+Default behavior:
+
+- First refresh at event time + 1 second.
+- If `actual` is still missing, refresh once per hour.
+- Stop tracking when `actual` has a real value.
+- Mark the job `expired` after 24 hours without `actual`.
+- Reuse the same day refresh when multiple events on one date fire close
+  together.
+
+```bash
+PYTHONPATH=src python scripts/event_timer_refresh.py \
+  --db "$HOME/data/futunn_calendar.duckdb" \
+  --min-star 3 \
+  --post-delay 1 \
+  --retry-interval-seconds 3600 \
+  --max-refresh-hours 24 \
+  --backfill-minutes 1440
+```
+
+`--retry-schedule` is still accepted for old fixed-delay behavior when passed
+explicitly, but the default uses the hourly absolute-time refresh window above.
+
 ## Python Surface
 
 - `FutunnCalendarClient.list(...)`: fetch one calendar page.

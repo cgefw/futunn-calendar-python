@@ -153,10 +153,12 @@ def sync_calendar_to_duckdb(
         "page_delay": page_delay,
         "include_details": include_details,
         "detail_size": detail_size,
+        "detail_delay": detail_delay,
         **dict(list_kwargs or {}),
     }
 
     with duckdb.connect(str(path)) as conn:
+        conn.execute("BEGIN TRANSACTION")
         try:
             for page in active_client.iter_pages(
                 tab=tab,
@@ -196,6 +198,7 @@ def sync_calendar_to_duckdb(
                 params=params,
                 error=None,
             )
+            conn.execute("COMMIT")
             return SyncResult(
                 db_path=str(path),
                 run_id=run_id,
@@ -208,6 +211,7 @@ def sync_calendar_to_duckdb(
                 finished_at=finished_at,
             )
         except Exception as exc:
+            conn.execute("ROLLBACK")
             finished_at = _now()
             _insert_run(
                 conn,

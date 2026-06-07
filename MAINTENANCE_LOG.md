@@ -25,6 +25,23 @@ This log is intended for humans and AI agents maintaining the repository.
 - Changed package metadata and docs away from official/stable API positioning.
 - Changed code license metadata to PolyForm Noncommercial License 1.0.0.
 
+## 2026-06-07
+
+- Renamed `AI_PROJECT_OVERVIEW.md` to `AGENTS.md`.
+- Updated `scripts/event_timer_refresh.py` so default retries follow absolute offsets from `event_time_utc`.
+- Kept explicit `--retry-schedule` as legacy fixed-delay behavior.
+- Added hourly default retry controls through `--retry-interval-seconds` and `--max-refresh-hours`.
+- Ensured events stop being tracked once `actual` is populated.
+- Ensured missing `actual` jobs expire after the configured max refresh window.
+- Updated README files to document event-time actual refresh behavior.
+- Checked tracked files for accidental API keys, `.env` content, DuckDB files, local data files, and bundled datasets.
+- Fixed duplicate event refresh scheduling race in `scripts/event_timer_refresh.py` by tracking running event keys in `self.running_jobs` and skipping them in `scan_and_schedule()`.
+- Hardened `scripts/event_timer_refresh.py` thread safety:
+  - Added a dedicated `jobs_lock` guarding all `self.timers` and `self.running_jobs` mutations across `scan_and_schedule()`, `_run_job()`, `_schedule_next_run()`, and `stop()`.
+  - Added a `db_lock` around every DuckDB write site in `_init_tables()` and `_record_job()` so concurrent refresh jobs cannot interleave `SELECT` + `DELETE` + `INSERT` on the same `event_key`.
+- Wrapped `sync_calendar_to_duckdb()` event/detail writes and the success run record in an explicit DuckDB transaction. If a sync fails mid-run, event writes are rolled back and a separate failed `calendar_sync_runs` row is recorded.
+- Tightened explicit `--retry-schedule` parsing so retry delays and repeat counts must be positive, preventing accidental zero-delay refresh loops.
+
 ## Maintenance Notes
 
 - Keep core imports free of DuckDB imports.
